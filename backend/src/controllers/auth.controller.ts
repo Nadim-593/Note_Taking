@@ -9,10 +9,11 @@ import { env } from '../config/env';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
 
 function cookieOptions() {
+  const isProd = env.nodeEnv === 'production';
   return {
     httpOnly: true,                                  // Not accessible via JS
-    secure: env.nodeEnv === 'production',            // HTTPS only in production
-    sameSite: 'strict' as const,                     // CSRF mitigation
+    secure: isProd,                                  // HTTPS only in production
+    sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax', // 'none' allows cross-site cookies between Vercel and Render
     maxAge: COOKIE_MAX_AGE,
     path: '/',
   };
@@ -75,11 +76,12 @@ export async function logout(
   res: Response,
   _next: NextFunction,
 ): Promise<void> {
+  const isProd = env.nodeEnv === 'production';
   res
     .clearCookie(AUTH_COOKIE, {
       httpOnly: true,
-      secure: env.nodeEnv === 'production',
-      sameSite: 'strict',
+      secure: isProd,
+      sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
       path: '/',
     })
     .status(200)
