@@ -1,15 +1,19 @@
 import app from './app';
-import { env } from './config/env';
+import { env, validateEnv } from './config/env';
 import { connectDatabase } from './config/database';
 
 async function bootstrap(): Promise<void> {
-  // Attempt DB connection (non-blocking — server starts regardless)
+  // Validate configuration before binding ports
+  validateEnv();
+
+  // Attempt DB connection (non-blocking — server starts regardless so health endpoint responds)
   connectDatabase().catch((err) => {
     console.warn('⚠️  Running without database connection:', err.message);
   });
 
-  app.listen(env.port, () => {
-    console.log(`🚀 Server running on http://localhost:${env.port}`);
+  // Explicitly bind to 0.0.0.0 for containerized / cloud hosting (Render, Docker)
+  app.listen(env.port, '0.0.0.0', () => {
+    console.log(`🚀 Server running on http://0.0.0.0:${env.port}`);
     console.log(`   Environment : ${env.nodeEnv}`);
     console.log(`   Health check: http://localhost:${env.port}/api/v1/health`);
   });

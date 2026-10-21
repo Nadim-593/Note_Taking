@@ -6,10 +6,7 @@
  *
  * Usage:
  *   ADMIN_NAME="Alice" ADMIN_EMAIL="alice@example.com" ADMIN_PASSWORD="Str0ng!Pass" \
- *     npx ts-node src/scripts/createAdmin.ts
- *
- * Or add to package.json:
- *   "create-admin": "ts-node src/scripts/createAdmin.ts"
+ *     npm run create-admin
  *
  * NEVER expose a public HTTP endpoint that performs this operation.
  */
@@ -18,14 +15,29 @@ import 'dotenv/config';
 import dns from 'dns';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
-
-try {
-  dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
-} catch {}
 import { env } from '../config/env';
 import User from '../models/User';
 
 const BCRYPT_ROUNDS = 12;
+
+async function connect(): Promise<void> {
+  try {
+    await mongoose.connect(env.mongodbUri);
+  } catch (error: any) {
+    const isDnsError =
+      error?.syscall === 'querySrv' ||
+      error?.code === 'ECONNREFUSED' ||
+      error?.message?.includes('querySrv');
+
+    if (isDnsError) {
+      console.warn('⚠️  SRV DNS lookup failed with system resolver. Retrying with Google/Cloudflare DNS...');
+      dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+      await mongoose.connect(env.mongodbUri);
+      return;
+    }
+    throw error;
+  }
+}
 
 async function main(): Promise<void> {
   const name = process.env.ADMIN_NAME?.trim();
@@ -44,7 +56,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  await mongoose.connect(env.mongodbUri);
+  await connect();
   console.log('✅ Connected to MongoDB');
 
   const existing = await User.findOne({ email });

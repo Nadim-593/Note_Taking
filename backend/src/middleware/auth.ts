@@ -38,10 +38,18 @@ export interface JwtPayload {
 
 export const AUTH_COOKIE = 'auth_token';
 
-// ── Middleware: require valid JWT in HttpOnly cookie ──────────────────────────
+// ── Middleware: require valid JWT (HttpOnly cookie or Authorization: Bearer header) ──
 
 export function authenticate(req: Request, _res: Response, next: NextFunction): void {
-  const token: string | undefined = req.cookies?.[AUTH_COOKIE];
+  // Check HttpOnly cookie first; fall back to Authorization: Bearer header for API / SSR clients
+  let token: string | undefined = req.cookies?.[AUTH_COOKIE];
+
+  if (!token && req.headers.authorization) {
+    const parts = req.headers.authorization.split(' ');
+    if (parts.length === 2 && /^Bearer$/i.test(parts[0])) {
+      token = parts[1];
+    }
+  }
 
   if (!token) {
     return next(new UnauthorizedError('Authentication required'));

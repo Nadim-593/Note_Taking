@@ -8,12 +8,20 @@ import { env } from '../config/env';
 
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
 
-function cookieOptions() {
+function cookieOptions(req?: Request) {
   const isProd = env.nodeEnv === 'production';
+  // Determine if request is over HTTPS (direct or through reverse proxy like Render)
+  const isHttps = req ? (req.secure || req.headers['x-forwarded-proto'] === 'https') : isProd;
+
+  // Browsers strictly require Secure=true when SameSite=None.
+  // If running in production mode locally without HTTPS, fallback to lax to prevent browser rejection.
+  const secure = isProd ? Boolean(isHttps) : false;
+  const sameSite = (isProd && isHttps ? 'none' : 'lax') as 'none' | 'lax';
+
   return {
-    httpOnly: true,                                  // Not accessible via JS
-    secure: isProd,                                  // HTTPS only in production
-    sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax', // 'none' allows cross-site cookies between Vercel and Render
+    httpOnly: true,
+    secure,
+    sameSite,
     maxAge: COOKIE_MAX_AGE,
     path: '/',
   };
@@ -34,9 +42,9 @@ export async function register(
     const { user, token } = await authService.registerUser(req.body);
 
     res
-      .cookie(AUTH_COOKIE, token, cookieOptions())
+      .cookie(AUTH_COOKIE, token, cookieOptions(req))
       .status(201)
-      .json({ success: true, data: { user } });
+      .json({ success: true, data: { user, token } });
   } catch (err) {
     next(err);
   }
@@ -54,9 +62,9 @@ export async function login(
     const { user, token } = await authService.loginUser(req.body);
 
     res
-      .cookie(AUTH_COOKIE, token, cookieOptions())
+      .cookie(AUTH_COOKIE, token, cookieOptions(req))
       .status(200)
-      .json({ success: true, data: { user } });
+      .json({ success: true, data: { user, token } });
   } catch (err) {
     next(err);
   }
@@ -72,17 +80,17 @@ export async function login(
  * remains technically valid until expiry) is documented explicitly.
  */
 export async function logout(
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction,
 ): Promise<void> {
-  const isProd = env.nodeEnv === 'production';
+  const opts = cookieOptions(req);
   res
     .clearCookie(AUTH_COOKIE, {
       httpOnly: true,
-      secure: isProd,
-      sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
-      path: '/',
+      secure: opts.secure,
+      sameSite: opts.sameSite,
+      path: opts.path,
     })
     .status(200)
     .json({

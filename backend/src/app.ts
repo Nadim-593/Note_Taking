@@ -11,21 +11,64 @@ import { notFoundHandler, errorHandler } from './middleware/errorHandler';
 
 const app: Application = express();
 
-// Trust reverse proxy (required for Render / cloud deployments with HTTPS cookies)
+// ── Reverse Proxy Trust ───────────────────────────────────────────────────────
+// Required for Render / Vercel / AWS / Cloudflare reverse proxies to correctly identify
+// HTTPS protocol (req.secure), client IP (req.ip), and forward secure cookies.
 if (env.nodeEnv === 'production') {
-  app.set('trust proxy', 1);
+  const trustProxySetting = process.env.TRUST_PROXY;
+  if (trustProxySetting === 'true') {
+    app.set('trust proxy', true);
+  } else if (trustProxySetting && !isNaN(Number(trustProxySetting))) {
+    app.set('trust proxy', Number(trustProxySetting));
+  } else {
+    app.set('trust proxy', 1);
+  }
 }
 
-// ── Middleware ────────────────────────────────────────────────────────────────
+// ── CORS Configuration ────────────────────────────────────────────────────────
+// Sanitize configured origins: strip trailing slashes, allow comma-separated entries
+const configuredOrigins = (env.frontendUrl || '')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: env.frontendUrl,
-    credentials: true, // Required to accept cookies from the frontend origin
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server, health probes)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      const normalizedOrigin = origin.replace(/\/+$/, '');
+
+      // Allow configured frontend origin(s)
+      if (configuredOrigins.includes(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      // Allow local development / local testing of production build
+      if (
+        env.nodeEnv !== 'production' ||
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalizedOrigin)
+      ) {
+        return callback(null, true);
+      }
+
+      // Origin not permitted
+      return callback(null, false);
+    },
+    credentials: true, // Allow cookies to be sent cross-origin
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    exposedHeaders: ['Set-Cookie'],
   }),
 );
+
+// ── Body & Cookie Parsers ────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser()); // Parses cookies so auth middleware can read them
+app.use(cookieParser());
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/v1/health', healthRouter);
