@@ -86,22 +86,7 @@ cd ../frontend
 npm install
 ```
 
-### Step 2: Configure Environment Variables
-Copy `.env.example` to `.env` in both folders:
 
-**Backend (`backend/.env`):**
-```env
-PORT=5000
-NODE_ENV=development
-MONGODB_URI=mongodb://localhost:27017/secure-notes
-JWT_SECRET=your-secure-jwt-secret-at-least-32-chars-long!
-FRONTEND_URL=http://localhost:3000
-```
-
-**Frontend (`frontend/.env.local`):**
-```env
-NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
-```
 
 ### Step 3: Bootstrap the First Admin Account
 To create an initial admin account safely without public endpoints, run:
