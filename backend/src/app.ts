@@ -11,6 +11,11 @@ import { notFoundHandler, errorHandler } from './middleware/errorHandler';
 
 const app: Application = express();
 
+// Trust reverse proxy (required for Render / cloud deployments with HTTPS cookies)
+if (env.nodeEnv === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(
   cors({
